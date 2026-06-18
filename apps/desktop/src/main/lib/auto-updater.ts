@@ -243,6 +243,15 @@ export function simulateError(): void {
 }
 
 export function setupAutoUpdater(): void {
+	// Fork: auto-update is disabled by default so this custom build can't be
+	// silently replaced by the official (feature-less) release. The nightly
+	// rebase+build job keeps the fork current instead. Set
+	// SUPERSET_ENABLE_AUTO_UPDATE=1 to restore upstream behaviour.
+	if (process.env.SUPERSET_ENABLE_AUTO_UPDATE !== "1") {
+		log.info("[auto-updater] disabled (fork build)");
+		return;
+	}
+
 	if (env.NODE_ENV === "development" || !IS_AUTO_UPDATE_PLATFORM) {
 		return;
 	}
