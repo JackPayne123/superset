@@ -357,6 +357,7 @@ function V2WorkspaceContent() {
 						>
 							<WorkspaceSidebar
 								workspaceId={workspaceId}
+								store={store}
 								onSelectFile={openFilePaneFromTreeClick}
 								onSelectDiffFile={openDiffPane}
 								onOpenComment={openCommentPane}

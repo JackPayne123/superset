@@ -1,3 +1,4 @@
+import type { WorkspaceStore } from "@superset/panes";
 import { Button } from "@superset/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { eq } from "@tanstack/db";
@@ -7,15 +8,15 @@ import { useEffect, useRef, useState } from "react";
 import { LuFile, LuGitCompareArrows } from "react-icons/lu";
 import { useWorkspaceGitStatus } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/providers/WorkspaceGitStatusProvider";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
-import { useSettings } from "renderer/stores/settings";
-import type { CommentPaneData, DiffFocusSide } from "../../types";
+import type { StoreApi } from "zustand/vanilla";
+import type { CommentPaneData, DiffFocusSide, PaneViewerData } from "../../types";
 import { FilesTab } from "./components/FilesTab";
 import { PRActionHeader } from "./components/PRActionHeader";
 import { SidebarHeader } from "./components/SidebarHeader";
+import { useActivityTab } from "./hooks/useActivityTab";
 import { useChangesTab } from "./hooks/useChangesTab";
 import { type OpenChatFn, usePRFlowDispatch } from "./hooks/usePRFlowDispatch";
 import { usePRFlowState } from "./hooks/usePRFlowState";
-import { useReviewTab } from "./hooks/useReviewTab";
 import type { SidebarTabDefinition } from "./types";
 
 // Gates the "Create PR" button only — the chat-driven create flow doesn't
@@ -23,9 +24,9 @@ import type { SidebarTabDefinition } from "./types";
 // always renders so users can see PR state and merge once a PR exists.
 const CREATE_PR_BUTTON_ENABLED = false;
 
-type SidebarTabId = "changes" | "files" | "review";
+type SidebarTabId = "changes" | "files" | "activity";
 
-const VALID_TAB_IDS: readonly SidebarTabId[] = ["changes", "files", "review"];
+const VALID_TAB_IDS: readonly SidebarTabId[] = ["changes", "files", "activity"];
 
 function isSidebarTabId(tab: string): tab is SidebarTabId {
 	return (VALID_TAB_IDS as readonly string[]).includes(tab);
@@ -50,6 +51,7 @@ interface WorkspaceSidebarProps {
 	selectedFilePath?: string;
 	pendingReveal?: PendingReveal | null;
 	workspaceId: string;
+	store: StoreApi<WorkspaceStore<PaneViewerData>>;
 }
 
 function IconButton({
@@ -81,12 +83,12 @@ function IconButton({
 export function WorkspaceSidebar({
 	onSelectFile,
 	onSelectDiffFile,
-	onOpenComment,
 	onOpenChat,
 	onSearch,
 	selectedFilePath,
 	pendingReveal,
 	workspaceId,
+	store,
 }: WorkspaceSidebarProps) {
 	const gitStatus = useWorkspaceGitStatus();
 	const collections = useCollections();
@@ -137,18 +139,6 @@ export function WorkspaceSidebar({
 		icon: LuGitCompareArrows,
 	};
 
-	const reviewTab = useReviewTab({
-		workspaceId,
-		onOpenComment,
-		onOpenInDiff: onSelectDiffFile
-			? (path, line, openInNewTab, side) => {
-					// Force annotations on so the user lands on the comment, not an empty line.
-					useSettings.getState().update("showDiffComments", true);
-					onSelectDiffFile(path, openInNewTab ?? false, line, side);
-				}
-			: undefined,
-	});
-
 	const { flowState, onRetry } = usePRFlowState(workspaceId);
 	const dispatch = usePRFlowDispatch({
 		onOpenChat: onOpenChat ?? (() => {}),
@@ -170,7 +160,14 @@ export function WorkspaceSidebar({
 		),
 	};
 
-	const tabs: SidebarTabDefinition[] = [filesTab, changesTab, reviewTab];
+	const activityTab = useActivityTab({
+		workspaceId,
+		store,
+		onSelectFile,
+	});
+
+	// Activity sits next to Files (recently-touched files, agent's-eye view).
+	const tabs: SidebarTabDefinition[] = [filesTab, activityTab, changesTab];
 	const activeTabDef = tabs.find((t) => t.id === activeTab);
 
 	return (
